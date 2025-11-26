@@ -417,7 +417,7 @@ def _parse_selectors(value: object, path: Path, forced_source: Optional[str]) ->
                 line=_get_line(entry),
             )
         match_node = entry.get("match")
-        if not match_node:
+        if match_node is None:
             raise MappingValidationError(
                 f"Selector '{name}' is missing a match block",
                 file_path=path,
