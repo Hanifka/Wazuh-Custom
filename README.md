@@ -251,18 +251,74 @@ sqlite3 ueba.db "SELECT * FROM entities LIMIT 10;"
 make db-shell
 ```
 
+## Field Mapping Configuration
+
+The mapper service normalizes raw Wazuh alerts using YAML-driven field mappings. The
+loader (`ueba.config.mapping_loader.load`) reads one or more YAML files and merges them
+according to priority: `global` < `integration` < `emergency_override`. By default the
+loader reads `config/mappings/default.yml`, but you can override the list of files by
+setting the `UEBA_MAPPING_PATHS` environment variable to an `os.pathsep`-separated list
+of paths.
+
+Each mapping file supports the following top-level sections:
+
+- `metadata.name` – friendly identifier for troubleshooting.
+- `priority` – one of `global`, `integration`, or `emergency_override`.
+- `defaults` – canonical field definitions (entity_id, entity_type, severity, timestamp,
+  and optional enrichment key/value pairs).
+- `selectors` – optional overrides that match on `rule_id`, `group`, or custom key/value
+  pairs. The loader automatically prefers rule matches, then group matches, and finally
+  custom matches, falling back to defaults when nothing matches.
+- `sources` – per-data-source overrides. Each source may define its own `defaults` and
+  `selectors` block. When a selector lives under `sources.<name>` it implicitly matches
+  only that source.
+
+Example snippet:
+
+```
+metadata:
+  name: default-wazuh
+priority: global
+
+defaults:
+  entity_id: agent.id
+  entity_type: host
+  severity: rule.level
+  timestamp: "@timestamp"
+  enrichment:
+    agent_name: agent.name
+
+sources:
+  wazuh:
+    defaults:
+      entity_type: endpoint
+    selectors:
+      - name: auth-failure
+        match:
+          group: authentication_failed
+        fields:
+          entity_type: user
+          entity_id: data.srcuser
+```
+
+To add a new mapping file, drop it in `config/mappings/` (or any accessible directory)
+and set `UEBA_MAPPING_PATHS` to include its path. Files later in the list override fields
+from earlier files according to their declared priority. Validation errors include the
+source file and line number to simplify debugging.
+
 ## Phase 0 - Foundation
 
-This is **Phase 0** (task 1/5) of the UEBA system implementation. The current schema includes:
+This is **Phase 0** of the UEBA system implementation. The current implementation includes:
 
-✅ Core database tables (`entities`, `raw_alerts`, `normalized_events`, etc.)  
+✅ Core database tables (`entities`, `raw_alerts`, `normalized_events`, etc.) - Task 1/5  
 ✅ Foreign key relationships with appropriate delete behaviors  
 ✅ Indexes for efficient queries on `(entity_id, observed_at)`  
 ✅ JSON columns for flexible payload storage  
 ✅ Timestamp defaults and soft-delete support  
 ✅ Migration workflow with Alembic  
 ✅ SQLite support for local development  
-✅ PostgreSQL support for production (optional)
+✅ PostgreSQL support for production (optional)  
+✅ YAML-driven field mapping system with priority-based configuration - Task 2/5
 
 Future phases will add additional tables and features through separate migrations.
 
