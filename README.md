@@ -333,6 +333,49 @@ duplicate rows.
 
 Sample fixture alerts live at `tests/fixtures/sample_alerts.jsonl` for quick manual tests.
 
+## Analyzer Service
+
+The analyzer service consumes normalized events, groups them by entity plus UTC day, and
+persists aggregate risk history to `entity_risk_history`. It is intentionally lightweight so
+it can run via cron or as a long-running worker.
+
+### CLI usage
+
+```
+python -m ueba.services.analyzer.analyzer_service --mode once
+```
+
+Common options:
+
+- `--mode once|daemon` – Run once (cron-friendly) or loop with a polling interval
+- `--since/--until` – ISO 8601 timestamps to override the default checkpoint window
+- `--interval` – Polling interval (seconds) for daemon mode (default: 300)
+- `--database-url` – Optional database override (defaults to `DATABASE_URL`)
+- `--log-level` – Logging verbosity
+
+Each run processes complete UTC-day windows and writes a JSON payload to `reason` with the
+following structure:
+
+```json
+{
+  "generator": "analyzer_service",
+  "kind": "daily_rollup",
+  "event_count": 12,
+  "highest_severity": 9,
+  "window_start": "2024-01-15T00:00:00+00:00",
+  "window_end": "2024-01-16T00:00:00+00:00",
+  "last_observed_at": "2024-01-15T14:30:00+00:00",
+  "rules": {
+    "triggered": ["high_event_volume"],
+    "metadata": {"event_count": 12}
+  }
+}
+```
+
+This metadata allows downstream APIs to surface event counts, highest severity, and the last
+processed timestamp for each entity/day. The checkpoint for incremental runs is derived from
+the latest `observed_at` value written by the analyzer.
+
 ## Phase 0 - Foundation
 
 This is **Phase 0** of the UEBA system implementation. The current implementation includes:
@@ -350,6 +393,11 @@ This is **Phase 0** of the UEBA system implementation. The current implementatio
 ✅ Entity upsert and normalized event persistence with idempotency guards  
 ✅ Structured logging and mapping metrics (latency, unmapped fields)  
 ✅ Unit tests with fixture alerts and SQLite test databases  
+✅ Analyzer service with pluggable pipeline (feature extraction, rules, scoring) - Task 4/5  
+✅ UTC-aligned daily rollup windows for entity risk history  
+✅ Idempotent checkpoint mechanism for incremental processing  
+✅ Cron-compatible CLI with daemon mode support  
+✅ Comprehensive unit tests for analyzer repository, pipeline, and service  
 
 Future phases will add additional tables and features through separate migrations.
 
