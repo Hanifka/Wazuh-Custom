@@ -1,6 +1,280 @@
-<h2 align="left">Wazuh Custom</h2>
+# Wazuh Custom - UEBA System
 
-This repository contains all custom Python scripts I’ve developed to extend, automate, and enhance Wazuh operations.
-Each script is designed to solve real-world use cases in threat detection, log analysis, and automation for Wazuh environments.
+This repository contains a User and Entity Behavior Analytics (UEBA) system built to extend, automate, and enhance Wazuh operations. The system is designed to solve real-world use cases in threat detection, log analysis, and automation for Wazuh environments.
 
+## Architecture Overview
 
+The UEBA system consists of two main services that share a consistent database schema:
+
+1. **Mapper Service** - Ingests raw alerts and normalizes them into structured events
+2. **Analyzer Service** - Analyzes normalized events to calculate entity risk scores
+
+## Project Structure
+
+```
+.
+├── src/ueba/              # Core UEBA package
+│   ├── db/                # Database models and configuration
+│   │   ├── base.py        # SQLAlchemy engine and session setup
+│   │   └── models.py      # ORM models for all tables
+│   └── __init__.py
+├── alembic/               # Database migrations
+│   ├── versions/          # Migration scripts
+│   └── env.py             # Alembic environment configuration
+├── scripts/               # Helper scripts
+├── .env.example           # Example environment configuration
+├── alembic.ini            # Alembic configuration
+├── pyproject.toml         # Project dependencies and metadata
+└── Makefile               # Convenience commands
+```
+
+## Database Schema
+
+The system uses six core tables for Phase 0:
+
+### 1. `entities`
+Stores unique entities (users, hosts, IP addresses, etc.) tracked by the system.
+- **Key fields**: `entity_type`, `entity_value`, `display_name`
+- **Indexes**: Unique index on `(entity_type, entity_value)`
+- **Mixins**: Timestamps, soft delete, status
+
+### 2. `raw_alerts`
+Stores raw alerts ingested from various sources (Wazuh, etc.).
+- **Key fields**: `source`, `vendor`, `product`, `severity`, `observed_at`, `original_payload`
+- **Indexes**: `(entity_id, observed_at)` for efficient queries
+- **Foreign keys**: `entity_id` → `entities.id` (SET NULL on delete)
+- **JSON fields**: `original_payload` (required), `enrichment_context` (optional)
+
+### 3. `normalized_events`
+Stores normalized, structured events derived from raw alerts.
+- **Key fields**: `event_type`, `risk_score`, `observed_at`, `summary`
+- **Indexes**: `(entity_id, observed_at)` for time-series queries
+- **Foreign keys**: 
+  - `raw_alert_id` → `raw_alerts.id` (SET NULL on delete)
+  - `entity_id` → `entities.id` (SET NULL on delete)
+- **JSON fields**: `normalized_payload`, `original_payload`
+
+### 4. `entity_risk_history`
+Tracks historical risk scores for each entity over time.
+- **Key fields**: `entity_id`, `risk_score`, `observed_at`, `reason`
+- **Indexes**: `(entity_id, observed_at)` for time-series analysis
+- **Foreign keys**: 
+  - `entity_id` → `entities.id` (CASCADE on delete)
+  - `normalized_event_id` → `normalized_events.id` (SET NULL on delete)
+
+### 5. `tp_fp_feedback`
+Stores analyst feedback on true positives and false positives.
+- **Key fields**: `entity_id`, `feedback_type`, `notes`, `submitted_by`, `submitted_at`
+- **Foreign keys**:
+  - `entity_id` → `entities.id` (CASCADE on delete)
+  - `normalized_event_id` → `normalized_events.id` (SET NULL on delete)
+
+### 6. `threshold_overrides`
+Stores custom thresholds for specific entities or global rules.
+- **Key fields**: `analyzer_key`, `metric`, `threshold_value`, `comparison`, `effective_from`, `effective_to`
+- **Foreign keys**: `entity_id` → `entities.id` (SET NULL on delete, NULL = global override)
+
+### Common Features
+
+All tables include:
+- **Timestamps**: `created_at`, `updated_at` (auto-managed)
+- **Soft delete**: `deleted_at` (NULL = active)
+- **Status flags**: `status` (default: 'active')
+
+## Setup
+
+### Prerequisites
+
+- Python 3.9+
+- SQLite (included) or PostgreSQL (optional)
+
+### Quick Start
+
+1. **Clone and enter the repository**:
+   ```bash
+   cd /path/to/repository
+   ```
+
+2. **Set up environment**:
+   ```bash
+   # Copy example environment file
+   cp .env.example .env
+   
+   # Edit .env to configure your database (optional)
+   # Default is SQLite at ./ueba.db
+   vim .env
+   ```
+
+3. **Install dependencies and run migrations**:
+   ```bash
+   make setup      # Create venv and install dependencies
+   make db-upgrade # Apply all migrations
+   ```
+
+### Using PostgreSQL
+
+To use PostgreSQL instead of SQLite:
+
+1. Install PostgreSQL support:
+   ```bash
+   source venv/bin/activate
+   pip install psycopg[binary]
+   ```
+
+2. Update `.env`:
+   ```bash
+   DATABASE_URL=postgresql+psycopg://username:password@localhost:5432/ueba
+   ```
+
+3. Run migrations:
+   ```bash
+   make db-upgrade
+   ```
+
+## Database Connection for Services
+
+Both the **mapper** and **analyzer** services obtain database connections using the same approach:
+
+```python
+from ueba.db.base import get_session_factory
+
+# Get a session factory
+SessionFactory = get_session_factory()
+
+# Use in application
+with SessionFactory() as session:
+    # Your database operations here
+    entities = session.query(Entity).all()
+    session.commit()
+
+# Or use the pre-configured SessionLocal
+from ueba.db.base import SessionLocal
+
+with SessionLocal() as session:
+    # Your operations
+    pass
+```
+
+The connection is automatically configured from the `DATABASE_URL` environment variable.
+
+## Migration Commands
+
+### Helper Script (SQLite)
+
+```bash
+./scripts/migrate_sqlite.sh
+```
+
+This script ensures `DATABASE_URL` points to `sqlite:///$(pwd)/ueba.db` and then runs `alembic upgrade head`. Optionally set `DATABASE_URL` before running to override the location.
+
+### Using Make (Recommended)
+
+```bash
+# Apply all pending migrations
+make db-upgrade
+
+# Rollback the last migration
+make db-downgrade
+
+# Generate a new migration after modifying models
+make db-migrate MSG="Add new field to entities"
+
+# Reset database (WARNING: deletes all data)
+make db-reset
+
+# Open SQLite shell to inspect database
+make db-shell
+
+# Show all available commands
+make help
+```
+
+### Using Alembic Directly
+
+```bash
+source venv/bin/activate
+
+# Apply migrations
+alembic upgrade head
+
+# Rollback one migration
+alembic downgrade -1
+
+# Show current revision
+alembic current
+
+# Show migration history
+alembic history
+
+# Generate new migration (auto-detect changes)
+alembic revision --autogenerate -m "Description of changes"
+
+# Generate empty migration (manual changes)
+alembic revision -m "Description of changes"
+```
+
+## Development Workflow
+
+### Adding New Models
+
+1. Edit `src/ueba/db/models.py` to add/modify models
+2. Generate migration: `make db-migrate MSG="Add new table"`
+3. Review generated migration in `alembic/versions/`
+4. Apply migration: `make db-upgrade`
+
+### Testing Migrations Locally
+
+```bash
+# Start fresh
+make db-reset
+
+# Verify all tables exist
+make db-shell
+sqlite> .tables
+sqlite> .schema entities
+sqlite> .exit
+```
+
+### SQLite Development Tips
+
+```bash
+# View all tables
+sqlite3 ueba.db ".tables"
+
+# View schema for a table
+sqlite3 ueba.db ".schema entities"
+
+# Query data
+sqlite3 ueba.db "SELECT * FROM entities LIMIT 10;"
+
+# Use the shell interactively
+make db-shell
+```
+
+## Phase 0 - Foundation
+
+This is **Phase 0** (task 1/5) of the UEBA system implementation. The current schema includes:
+
+✅ Core database tables (`entities`, `raw_alerts`, `normalized_events`, etc.)  
+✅ Foreign key relationships with appropriate delete behaviors  
+✅ Indexes for efficient queries on `(entity_id, observed_at)`  
+✅ JSON columns for flexible payload storage  
+✅ Timestamp defaults and soft-delete support  
+✅ Migration workflow with Alembic  
+✅ SQLite support for local development  
+✅ PostgreSQL support for production (optional)
+
+Future phases will add additional tables and features through separate migrations.
+
+## Contributing
+
+When adding new database changes:
+
+1. Always use migrations - never modify the database directly
+2. Test migrations both upgrade and downgrade
+3. Document any new tables or significant schema changes in this README
+4. Use meaningful migration messages
+
+## License
+
+This project is part of the Wazuh Custom toolkit.
