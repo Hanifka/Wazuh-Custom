@@ -57,6 +57,7 @@ class RawAlert(TimestampMixin, SoftDeleteMixin, StatusMixin, Base):
     __tablename__ = "raw_alerts"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    dedupe_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     entity_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("entities.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -73,6 +74,7 @@ class RawAlert(TimestampMixin, SoftDeleteMixin, StatusMixin, Base):
 
     __table_args__ = (
         Index("ix_raw_alerts_entity_observed", "entity_id", "observed_at"),
+        Index("ux_raw_alerts_dedupe", "dedupe_hash", unique=True),
     )
 
 

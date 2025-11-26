@@ -306,6 +306,33 @@ and set `UEBA_MAPPING_PATHS` to include its path. Files later in the list overri
 from earlier files according to their declared priority. Validation errors include the
 source file and line number to simplify debugging.
 
+## Mapper Service
+
+The mapper service ingests raw alerts, applies YAML mappings, and persists entities plus
+normalized events.
+
+### CLI usage
+
+```
+python -m ueba.services.mapper.mapper_service \
+  --input stdin \
+  --source wazuh \
+  --database-url sqlite:///./ueba.db \
+  --mapping-paths config/mappings/default.yml
+```
+
+Input sources:
+
+- `stdin` (default): newline-delimited JSON payloads.
+- `file`: tail an on-disk file (`--file /path/to/alerts.jsonl`, optional `--follow`).
+- `queue`: stubbed message queue. Provide a JSON array via STDIN.
+
+The service accepts `--batch-size` (commit frequency) and `--log-level` for structured
+logging. Idempotency is enforced using a `dedupe_hash`, ensuring retries do not create
+duplicate rows.
+
+Sample fixture alerts live at `tests/fixtures/sample_alerts.jsonl` for quick manual tests.
+
 ## Phase 0 - Foundation
 
 This is **Phase 0** of the UEBA system implementation. The current implementation includes:
@@ -318,7 +345,11 @@ This is **Phase 0** of the UEBA system implementation. The current implementatio
 ✅ Migration workflow with Alembic  
 ✅ SQLite support for local development  
 ✅ PostgreSQL support for production (optional)  
-✅ YAML-driven field mapping system with priority-based configuration - Task 2/5
+✅ YAML-driven field mapping system with priority-based configuration - Task 2/5  
+✅ Mapper service with multi-source ingestion (STDIN, file, message queue stub) - Task 3/5  
+✅ Entity upsert and normalized event persistence with idempotency guards  
+✅ Structured logging and mapping metrics (latency, unmapped fields)  
+✅ Unit tests with fixture alerts and SQLite test databases  
 
 Future phases will add additional tables and features through separate migrations.
 
