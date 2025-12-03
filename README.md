@@ -372,13 +372,32 @@ following structure:
   "rules": {
     "triggered": ["high_event_volume"],
     "metadata": {"event_count": 12}
+  },
+  "baseline": {
+    "avg": 32.5,
+    "sigma": 8.2,
+    "delta": 15.0,
+    "is_anomalous": true
   }
 }
 ```
 
-This metadata allows downstream APIs to surface event counts, highest severity, and the last
-processed timestamp for each entity/day. The checkpoint for incremental runs is derived from
-the latest `observed_at` value written by the analyzer.
+This metadata allows downstream APIs to surface event counts, highest severity, baseline metrics,
+and the last processed timestamp for each entity/day. The checkpoint for incremental runs is derived
+from the latest `observed_at` value written by the analyzer.
+
+### Baseline Risk Engine
+
+The Phase 1 baseline risk engine computes an average and population standard deviation of the last
+`UEBA_BASELINE_WINDOW_DAYS` windows for each entity to identify anomalies. Configure the engine via
+environment variables:
+
+- `UEBA_BASELINE_WINDOW_DAYS` – lookback period for baseline (default: 30 days)
+- `UEBA_SIGMA_MULTIPLIER` – anomaly threshold multiplier (default: 3.0)
+- `UEBA_ALERT_LOG_PATH` – path for newline-delimited JSON alert logs (default: `./ueba_alerts.log`)
+
+Each anomaly log contains timestamp, entity ID, risk score, baseline statistics, delta from average,
+and triggered rules. The analyzer CLI automatically picks up these env vars when running.
 
 ## Phase 0 - Foundation
 

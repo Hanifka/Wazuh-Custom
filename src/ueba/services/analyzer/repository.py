@@ -105,6 +105,12 @@ class AnalyzerRepository:
                 "triggered": result.rule_evaluation.triggered_rules,
                 "metadata": result.rule_evaluation.metadata,
             },
+            "baseline": {
+                "avg": result.baseline_avg,
+                "sigma": result.baseline_sigma,
+                "delta": result.delta,
+                "is_anomalous": result.is_anomalous,
+            },
         }
         reason = json.dumps(payload, sort_keys=True)
 
