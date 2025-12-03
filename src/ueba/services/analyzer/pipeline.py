@@ -66,6 +66,10 @@ class AnalyzerResult:
     features: ExtractedFeatures
     rule_evaluation: RuleEvaluation
     risk_score: float
+    baseline_avg: Optional[float] = None
+    baseline_sigma: Optional[float] = None
+    delta: Optional[float] = None
+    is_anomalous: bool = False
 
 
 class AnalyzerStage(Protocol):

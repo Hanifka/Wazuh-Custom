@@ -173,6 +173,10 @@ def test_persist_result_creates_new_history(session_factory, sample_entity):
                 metadata={"highest_severity": 8},
             ),
             risk_score=45.0,
+            baseline_avg=30.0,
+            baseline_sigma=5.0,
+            delta=15.0,
+            is_anomalous=True,
         )
 
         repo = AnalyzerRepository(session)

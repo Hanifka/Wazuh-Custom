@@ -6,9 +6,11 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from ueba.db.base import get_session_factory
+from ueba.logging import AlertLogger
 
 from .pipeline import AnalyzerPipeline
 from .repository import AnalyzerRepository
+from .baseline import BaselineCalculator
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +28,11 @@ class AnalyzerService:
         self,
         session_factory=None,
         pipeline: Optional[AnalyzerPipeline] = None,
+        alert_logger: Optional[AlertLogger] = None,
     ):
         self.session_factory = session_factory or get_session_factory()
         self.pipeline = pipeline or AnalyzerPipeline()
+        self.alert_logger = alert_logger or AlertLogger()
 
     def run_once(
         self,
@@ -41,6 +45,7 @@ class AnalyzerService:
 
         with self.session_factory() as session:
             repository = AnalyzerRepository(session)
+            baseline = BaselineCalculator(session)
 
             # Determine checkpoint
             checkpoint = since or repository.get_latest_checkpoint()
@@ -64,7 +69,39 @@ class AnalyzerService:
                     window_end=window.window_end,
                     events=window.events,
                 )
+
+                baseline_stats = baseline.get_baseline(window.entity_id, window.window_end)
+                is_anomalous, delta = baseline.is_anomalous(
+                    window.entity_id,
+                    window.window_end,
+                    result.risk_score,
+                )
+
+                result = result.__class__(
+                    entity_id=result.entity_id,
+                    window_start=result.window_start,
+                    window_end=result.window_end,
+                    features=result.features,
+                    rule_evaluation=result.rule_evaluation,
+                    risk_score=result.risk_score,
+                    baseline_avg=baseline_stats.avg,
+                    baseline_sigma=baseline_stats.sigma,
+                    delta=delta,
+                    is_anomalous=is_anomalous,
+                )
+
                 repository.persist_result(result)
+
+                if is_anomalous:
+                    self.alert_logger.log_anomaly(
+                        entity_id=result.entity_id,
+                        risk_score=result.risk_score,
+                        baseline_avg=result.baseline_avg or 0.0,
+                        baseline_sigma=result.baseline_sigma or 0.0,
+                        delta=result.delta or 0.0,
+                        triggered_rules=result.rule_evaluation.triggered_rules,
+                    )
+
                 processed += 1
 
             session.commit()
