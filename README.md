@@ -2,6 +2,8 @@
 
 This repository contains a User and Entity Behavior Analytics (UEBA) system built to extend, automate, and enhance Wazuh operations. The system is designed to solve real-world use cases in threat detection, log analysis, and automation for Wazuh environments.
 
+See `INTEGRATION_GUIDE_FRESH_GRADUATES.txt` for detailed onboarding.
+
 ## Architecture Overview
 
 The UEBA system consists of two main services that share a consistent database schema:
@@ -82,6 +84,8 @@ All tables include:
 - **Status flags**: `status` (default: 'active')
 
 ## Setup
+
+**New to the project?** See `INTEGRATION_GUIDE_FRESH_GRADUATES.txt` for a complete step-by-step onboarding guide covering environment setup, core concepts, risk scoring algorithms, testing, and troubleshooting.
 
 ### Prerequisites
 
