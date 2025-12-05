@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from ueba.api.auth import verify_credentials
 from ueba.api.dependencies import get_session
 from ueba.api.schemas import EntityRosterItem, EntityRosterResponse, RiskHistoryItem, RiskHistoryResponse
-from ueba.db.models import Entity, EntityRiskHistory
+from ueba.db.models import Entity, EntityRiskHistory, TPFPFeedback
 
 router = APIRouter(prefix="/api/v1/entities", tags=["entities"], dependencies=[Depends(verify_credentials)])
 
@@ -42,6 +42,28 @@ def _get_latest_entity_risk(
     if result:
         return result[0], _parse_reason_json(result[1])
     return None
+
+
+def _get_feedback_stats(session: Session, entity_id: int) -> tuple[int, int, float]:
+    """Get TP/FP counts and ratio for an entity. Returns (tp_count, fp_count, fp_ratio)."""
+    stmt = (
+        select(
+            func.count().filter(TPFPFeedback.feedback_type == "tp"),
+            func.count().filter(TPFPFeedback.feedback_type == "fp"),
+        )
+        .where(
+            TPFPFeedback.entity_id == entity_id,
+            TPFPFeedback.deleted_at.is_(None),
+        )
+    )
+    result = session.execute(stmt).first()
+    tp_count = result[0] if result[0] is not None else 0
+    fp_count = result[1] if result[1] is not None else 0
+
+    total = tp_count + fp_count
+    fp_ratio = (fp_count / total) if total > 0 else 0.0
+
+    return tp_count, fp_count, fp_ratio
 
 
 @router.get("", response_model=EntityRosterResponse)
@@ -105,6 +127,9 @@ def list_entities(
         )
         last_observed = session.execute(last_observed_stmt).scalar()
 
+        # Get feedback stats
+        tp_count, fp_count, fp_ratio = _get_feedback_stats(session, entity.id)
+
         item = EntityRosterItem(
             entity_id=entity.id,
             entity_type=entity.entity_type,
@@ -117,6 +142,9 @@ def list_entities(
             is_anomalous=is_anomalous,
             triggered_rules=triggered_rules,
             last_observed_at=last_observed,
+            tp_count=tp_count,
+            fp_count=fp_count,
+            fp_ratio=fp_ratio,
         )
         items.append(item)
 
