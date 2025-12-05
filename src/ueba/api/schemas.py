@@ -20,6 +20,9 @@ class EntityRosterItem(BaseModel):
     is_anomalous: bool = False
     triggered_rules: List[str] = Field(default_factory=list)
     last_observed_at: Optional[datetime] = None
+    tp_count: int = 0
+    fp_count: int = 0
+    fp_ratio: float = 0.0
 
     class Config:
         from_attributes = True
@@ -92,3 +95,47 @@ class HealthResponse(BaseModel):
     status: str
     database_connected: bool
     timestamp: datetime
+
+
+class FeedbackSubmissionRequest(BaseModel):
+    """Request to submit TP/FP feedback."""
+
+    feedback_type: str = Field(..., description="Type of feedback: 'tp' or 'fp'")
+    normalized_event_id: Optional[int] = None
+    notes: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackItem(BaseModel):
+    """Single feedback submission."""
+
+    feedback_id: int
+    feedback_type: str
+    normalized_event_id: Optional[int] = None
+    notes: Optional[str] = None
+    submitted_by: Optional[str] = None
+    submitted_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackStats(BaseModel):
+    """TP/FP statistics for an entity."""
+
+    tp_count: int
+    fp_count: int
+    fp_ratio: float
+
+
+class FeedbackResponse(BaseModel):
+    """Response containing feedback history and updated stats."""
+
+    entity_id: int
+    items: List[FeedbackItem]
+    stats: FeedbackStats
+
+    class Config:
+        from_attributes = True

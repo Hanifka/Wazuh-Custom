@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from ueba.api.routers import entities, events, health
+from ueba.api.routers import entities, events, feedback, health
 
 app = FastAPI(
     title="UEBA Dashboard API",
@@ -24,6 +24,7 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(entities.router)
 app.include_router(events.router)
+app.include_router(feedback.router)
 
 
 @app.get("/")
