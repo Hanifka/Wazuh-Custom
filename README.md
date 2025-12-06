@@ -399,6 +399,95 @@ environment variables:
 Each anomaly log contains timestamp, entity ID, risk score, baseline statistics, delta from average,
 and triggered rules. The analyzer CLI automatically picks up these env vars when running.
 
+## UEBA Dashboard UI
+
+A dark-mode, Bootswatch Darkly-themed web dashboard provides real-time visualization of entity risk scores,
+baseline analysis, and triggering events. The dashboard requires Basic Auth credentials (from `UEBA_DASH_USERNAME`
+and `UEBA_DASH_PASSWORD` environment variables) and includes session cookie management for seamless user experience.
+
+### Features
+
+- **Entity Roster**: Searchable list of entities with latest risk scores, delta from baseline, and triggered event counts
+- **Detail Pane**: Shows selected entity's latest risk score, baseline comparison, triggering rules, and normalized events
+- **Risk History Sparkline**: Chart.js-based sparkline visualization of risk history (last 100 days)
+- **Event Details**: Expandable JSON view of normalized events with rule names and timestamps
+- **Manual Refresh**: Button-triggered API refresh with last-refresh timestamp display
+- **Login Form**: Simple login interface with session cookie storage (no hardcoded credentials in JS)
+- **Dark Mode**: Bootswatch Darkly CSS for accessibility in low-light environments
+
+### Running the Dashboard
+
+**Prerequisites:**
+- Environment variables configured: `UEBA_DASH_USERNAME`, `UEBA_DASH_PASSWORD`
+- Database migrations applied: `make db-upgrade`
+- Sample data in the database (from analyzer or mapper services)
+
+**Start the dashboard:**
+
+```bash
+# Option 1: Using make target (recommended)
+make run-dashboard
+
+# Option 2: Direct uvicorn command
+source venv/bin/activate
+uvicorn ueba.api.main:app --reload --host 0.0.0.0
+
+# Option 3: With specific port
+source venv/bin/activate
+uvicorn ueba.api.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+The dashboard will be available at `http://localhost:8000/` (or the configured host:port).
+
+### Configuration
+
+Set these environment variables before running:
+
+```bash
+# Authentication credentials (required)
+export UEBA_DASH_USERNAME=admin
+export UEBA_DASH_PASSWORD=your_secure_password
+
+# Database URL (optional, defaults to SQLite)
+export DATABASE_URL=sqlite:///$(pwd)/ueba.db
+
+# Baseline analysis settings (optional, used by API)
+export UEBA_BASELINE_WINDOW_DAYS=30
+export UEBA_SIGMA_MULTIPLIER=3.0
+```
+
+### API Endpoints
+
+The dashboard consumes the following read-only API endpoints (all require Basic Auth):
+
+- `GET /api/v1/entities` – Paginated roster of entities
+- `GET /api/v1/entities/{entity_id}/history` – Risk history for an entity
+- `GET /api/v1/entities/{entity_id}/events` – Recent normalized events
+- `POST /login` – Create a session token for the dashboard
+
+### Architecture
+
+- **Frontend**: Jinja2 HTML template + vanilla JavaScript with Chart.js for visualizations
+- **Styling**: Bootstrap 5 + Bootswatch Darkly theme + custom dark-mode CSS
+- **Session Management**: Signed session cookies (24-hour TTL, stored in browser)
+- **API Integration**: Fetch-based HTTP requests with Bearer token authentication
+
+### Testing
+
+Dashboard template and functionality tests are in `tests/test_dashboard_template.py`:
+
+```bash
+make test tests/test_dashboard_template.py
+```
+
+Key test coverage:
+- Template renders at `/` with proper HTML structure
+- CSS includes Bootswatch Darkly and dark-mode colors
+- JavaScript initializes login modal and dashboard class
+- Login endpoint validates credentials
+- Static files are properly mounted
+- All expected UI elements (search, refresh button, etc.) are present
+
 ## Phase 0 - Foundation
 
 This is **Phase 0** of the UEBA system implementation. The current implementation includes:

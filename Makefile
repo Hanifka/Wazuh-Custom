@@ -1,7 +1,7 @@
 DATABASE_URL ?= sqlite:///$(PWD)/ueba.db
 export DATABASE_URL
 
-.PHONY: help setup venv install db-upgrade db-downgrade db-migrate db-reset db-shell run-api clean
+.PHONY: help setup venv install db-upgrade db-downgrade db-migrate db-reset db-shell run-api run-dashboard clean
 
 help:
     @echo "UEBA Project - Available commands:"
@@ -14,6 +14,7 @@ help:
     @echo "  make db-reset    - Reset database (drop and recreate all tables)"
     @echo "  make db-shell    - Open SQLite shell to inspect database"
     @echo "  make run-api     - Start the API server (uvicorn)"
+    @echo "  make run-dashboard - Start the dashboard with API server"
     @echo "  make clean       - Remove virtual environment and database files"
     @echo ""
 
@@ -56,6 +57,11 @@ db-shell:
 run-api:
     @echo "Starting API server..."
     . venv/bin/activate && uvicorn ueba.api.main:app --reload
+
+run-dashboard:
+    @echo "Starting dashboard with API server..."
+    @echo "Dashboard will be available at http://localhost:8000/"
+    . venv/bin/activate && uvicorn ueba.api.main:app --reload --host 0.0.0.0
 
 clean:
     @echo "Cleaning up..."
